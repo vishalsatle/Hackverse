@@ -1,9 +1,5 @@
-import { execFile } from "node:child_process";
-import path from "node:path";
-import { promisify } from "node:util";
-
-const execFileAsync = promisify(execFile);
-const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+const FASTAPI_BASE_URL = process.env.FASTAPI_URL ?? "http://localhost:8000";
+const POLL_INTERVAL_MS = 15 * 1000;
 
 export type BriefPayload = {
   liveArticles: Array<{
@@ -17,146 +13,90 @@ export type BriefPayload = {
   brief: string;
 };
 
-type JobState = {
-  key: string;
-  mode: string;
-  location: string;
+type ScheduledBriefResult = {
   data: BriefPayload | null;
   generatedAt: number;
   running: boolean;
-  lastError: string | null;
   nextRunAt: number;
-  runCount: number;
-  successCount: number;
-  lastDurationMs: number;
-  lastArticleCount: number;
+  lastError: string | null;
+  telemetry: {
+    runCount: number;
+    successCount: number;
+    lastDurationMs: number;
+    lastArticleCount: number;
+  };
 };
 
-const jobs = new Map<string, JobState>();
-let globalNextRunAt = Date.now() + REFRESH_INTERVAL_MS;
-let schedulerStarted = false;
+async function fetchFromFastAPI(
+  mode: string,
+  location: string,
+  force: boolean
+): Promise<ScheduledBriefResult> {
+  const params = new URLSearchParams({ mode, location });
+  if (force) params.set("force", "true");
 
-function parsePipelineOutput(stdout: string): BriefPayload {
-  const inputMarker = "=== LIVE OSINT INPUT (TOP 5) ===";
-  const runMarker = "=== RUNNING CREW PIPELINE ===";
-  const briefMarker = "=== FINAL COMMANDER BRIEF ===";
-
-  const inputStart = stdout.indexOf(inputMarker);
-  const runStart = stdout.indexOf(runMarker);
-  const briefStart = stdout.indexOf(briefMarker);
-
-  if (inputStart === -1 || runStart === -1 || briefStart === -1) {
-    throw new Error("Unexpected pipeline output format.");
-  }
-
-  const jsonSlice = stdout
-    .slice(inputStart + inputMarker.length, runStart)
-    .trim();
-  const liveArticles = JSON.parse(jsonSlice);
-  const brief = stdout.slice(briefStart + briefMarker.length).trim();
-
-  return { liveArticles, brief };
-}
-
-async function runPipeline(mode: string, location: string): Promise<BriefPayload> {
-  const cwd = process.cwd();
-  const scriptPath = path.join(cwd, "groq_agent_pipeline.py");
-  const winPython = path.join(cwd, ".venv", "Scripts", "python.exe");
-  const unixPython = path.join(cwd, ".venv", "bin", "python");
-  const pythonExec = process.platform === "win32" ? winPython : unixPython;
-
-  const { stdout } = await execFileAsync(pythonExec, [scriptPath], {
-    cwd,
-    timeout: 290000,
-    maxBuffer: 10 * 1024 * 1024,
-    env: {
-      ...process.env,
-      INTEL_MODE: mode,
-      INTEL_LOCATION: location,
-    },
+  const res = await fetch(`${FASTAPI_BASE_URL}/brief?${params.toString()}`, {
+    cache: "no-store",
   });
-  return parsePipelineOutput(stdout);
-}
 
-async function executeJob(job: JobState) {
-  if (job.running) return;
-  job.running = true;
-  const startedAt = Date.now();
-  job.runCount += 1;
-  try {
-    const payload = await runPipeline(job.mode, job.location);
-    job.data = payload;
-    job.generatedAt = Date.now();
-    job.successCount += 1;
-    job.lastArticleCount = payload.liveArticles.length;
-    job.lastError = null;
-  } catch (error) {
-    job.lastError = error instanceof Error ? error.message : "Unknown pipeline error";
-  } finally {
-    job.lastDurationMs = Date.now() - startedAt;
-    job.running = false;
-  }
-}
-
-function createJob(mode: string, location: string): JobState {
-  const key = `${mode}:${location}`;
-  const job: JobState = {
-    key,
-    mode,
-    location,
-    data: null,
-    generatedAt: 0,
-    running: false,
-    lastError: null,
-    nextRunAt: globalNextRunAt,
-    runCount: 0,
-    successCount: 0,
-    lastDurationMs: 0,
-    lastArticleCount: 0,
-  };
-
-  void executeJob(job);
-  return job;
-}
-
-function startScheduler() {
-  if (schedulerStarted) return;
-  schedulerStarted = true;
-  setInterval(() => {
-    globalNextRunAt = Date.now() + REFRESH_INTERVAL_MS;
-    for (const job of jobs.values()) {
-      job.nextRunAt = globalNextRunAt;
-      void executeJob(job);
-    }
-  }, REFRESH_INTERVAL_MS);
-}
-
-export async function getScheduledBrief(mode: string, location: string, force = false) {
-  startScheduler();
-  const key = `${mode}:${location}`;
-  let job = jobs.get(key);
-  if (!job) {
-    job = createJob(mode, location);
-    jobs.set(key, job);
+  if (res.status === 202) {
+    const body = await res.json();
+    const detail = body.detail ?? body;
+    return {
+      data: null,
+      generatedAt: 0,
+      running: detail.running ?? true,
+      nextRunAt: detail.next_run_at ?? Date.now() + 60_000,
+      lastError: detail.last_error ?? null,
+      telemetry: {
+        runCount: detail.telemetry?.run_count ?? 0,
+        successCount: detail.telemetry?.success_count ?? 0,
+        lastDurationMs: detail.telemetry?.last_duration_ms ?? 0,
+        lastArticleCount: detail.telemetry?.last_article_count ?? 0,
+      },
+    };
   }
 
-  if (force) {
-    await executeJob(job);
-  } else if (!job.data && !job.running) {
-    await executeJob(job);
+  if (!res.ok) {
+    const text = await res.text().catch(() => "Unknown error");
+    throw new Error(`FastAPI error ${res.status}: ${text.slice(0, 200)}`);
   }
+
+  const data = await res.json();
+
+  const liveArticles = (data.live_articles ?? []).map(
+    (a: Record<string, string>) => ({
+      source_id: a.source_id,
+      source_name: a.source_name,
+      title: a.title,
+      summary: a.summary,
+      link: a.link,
+      published: a.published,
+    })
+  );
 
   return {
-    data: job.data,
-    generatedAt: job.generatedAt,
-    running: job.running,
-    nextRunAt: job.nextRunAt,
-    lastError: job.lastError,
+    data: {
+      liveArticles,
+      brief: data.brief ?? "",
+    },
+    generatedAt: data.generated_at ?? Date.now(),
+    running: data.running ?? false,
+    nextRunAt: data.next_run_at ?? Date.now() + 300_000,
+    lastError: data.last_error ?? null,
     telemetry: {
-      runCount: job.runCount,
-      successCount: job.successCount,
-      lastDurationMs: job.lastDurationMs,
-      lastArticleCount: job.lastArticleCount,
+      runCount: data.telemetry?.run_count ?? 0,
+      successCount: data.telemetry?.success_count ?? 0,
+      lastDurationMs: data.telemetry?.last_duration_ms ?? 0,
+      lastArticleCount: data.telemetry?.last_article_count ?? 0,
     },
   };
+}
+
+export async function getScheduledBrief(
+  mode: string,
+  location: string,
+  force = false
+): Promise<ScheduledBriefResult> {
+  return fetchFromFastAPI(mode, location, force);
 }

@@ -15,6 +15,7 @@ from crewai import Agent, Crew, LLM, Process, Task
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 
+load_dotenv()
 
 GNEWS_ENDPOINT = "https://gnews.io/api/v4/search"
 OPENWEATHER_ENDPOINT = "https://api.openweathermap.org/data/2.5/weather"
@@ -550,11 +551,23 @@ def build_crew() -> Crew:
     """Create agents, tasks, and sequential Crew pipeline."""
     ensure_groq_key()
 
-    # Required LangChain Groq model instantiation.
-    llm = ChatGroq(temperature=0, model_name="llama-3.3-70b-versatile")
+    # Explicitly resolve the active Groq key (primary -> backup fallback)
+    api_key = os.getenv("GROQ_API_KEY") or os.getenv("GROQ_API_KEY_BACKUP")
+
+    # Required LangChain Groq model instantiation -- api_key passed explicitly
+    # so it works even if env var is set late (e.g. inside run_intel_pipeline loop)
+    llm = ChatGroq(
+        temperature=0,
+        model_name="llama-3.3-70b-versatile",
+        groq_api_key=api_key,
+    )
     # CrewAI 0.11.x does not accept ChatGroq instances directly on Agent(llm=...).
     # Use CrewAI-native LLM wrapper for execution while retaining the required ChatGroq object.
-    crew_llm = LLM(model="groq/llama-3.3-70b-versatile", temperature=0)
+    crew_llm = LLM(
+        model="groq/llama-3.3-70b-versatile",
+        temperature=0,
+        api_key=api_key,  # explicitly passed -- fixes silent key-not-found failures
+    )
 
     osint_analyst = Agent(
         role="OSINT Analyst",
@@ -1211,7 +1224,6 @@ def build_visual_dashboard(
 
 def main() -> None:
     run_started = time.perf_counter()
-    load_dotenv()
     ensure_groq_key()
     mode = os.getenv("INTEL_MODE", "conflict").strip().lower()
     location = os.getenv("INTEL_LOCATION", "Kyiv").strip() or "Kyiv"
