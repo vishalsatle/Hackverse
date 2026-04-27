@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Intel Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #081020;
+      color: #e8f0ff;
+    }
+    .wrap {
+      max-width: 1100px;
+      margin: 24px auto;
+      padding: 0 16px 24px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      color: #72d1ff;
+      letter-spacing: 0.4px;
+    }
+    .subtitle {
+      margin: 0 0 20px;
+      color: #9ab3d1;
+      font-size: 14px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+    .card {
+      background: #101a31;
+      border: 1px solid #253454;
+      border-radius: 12px;
+      padding: 14px;
+    }
+    .card h2 {
+      margin: 0 0 12px;
+      font-size: 15px;
+      color: #b6cfff;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+    #map {
+      height: 320px;
+      border-radius: 8px;
+    }
+    .empty-map {
+      background: #0c1426;
+      border: 1px dashed #334d76;
+      border-radius: 8px;
+      min-height: 320px;
+      display: grid;
+      place-items: center;
+      color: #8ea7c7;
+      text-align: center;
+      padding: 16px;
+    }
+    .table-wrap {
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      border-bottom: 1px solid #253454;
+      padding: 10px 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      color: #9ec2ef;
+      font-weight: 600;
+      font-size: 12px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .legend {
+      margin-top: 8px;
+      color: #9ab3d1;
+      font-size: 13px;
+    }
+    @media (max-width: 860px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Live Updates Dashboard</h1>
+    <p class="subtitle">Simple view for non-technical users. All times below are converted to IST.</p>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Risk By Update</h2>
+        <canvas id="riskChart" height="180"></canvas>
+        <p class="legend">Risk meaning: 0-49 = Low, 50-74 = Medium, 75-100 = High.</p>
+      </section>
+
+      <section class="card">
+        <h2>Source Mix</h2>
+        <canvas id="sourceChart" height="180"></canvas>
+      </section>
+
+      <section class="card" style="grid-column: 1 / -1;">
+        <h2>Escalation Status</h2>
+        <p><strong>Level:</strong> LOW |
+        <strong>Index:</strong> 45.52 |
+        <strong>Baseline:</strong> 45.0 |
+        <strong>Delta:</strong> 0.52</p>
+      </section>
+
+      <section class="card" style="grid-column: 1 / -1;">
+        <h2>Map View</h2>
+        <div class='empty-map'>No latitude/longitude data available in current records.<br/>Map will appear automatically once intel includes coordinates.</div>
+      </section>
+
+      <section class="card" style="grid-column: 1 / -1;">
+        <h2>Recent Updates (Easy Read)</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Update</th>
+                <th>Source</th>
+                <th>Time (IST)</th>
+                <th>Risk</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>1</td><td>Geopolitical and military lessons drawn from the Russia–Ukraine conflict (I) - Ifimes</td><td>Google News RSS</td><td>27 Nov 2025, 05:10 AM IST</td><td>58 (Medium)</td></tr><tr><td>2</td><td>Military conflicts mostly haven’t held up long-term stock growth - invesco.com</td><td>Google News RSS</td><td>02 Mar 2026, 01:30 PM IST</td><td>58 (Medium)</td></tr><tr><td>3</td><td>How Iran has become a war of military, economy and geopolitics - Channel 4 News | Substack</td><td>Google News RSS</td><td>18 Mar 2026, 12:30 PM IST</td><td>46 (Low)</td></tr><tr><td>4</td><td>What has conflict in Iran revealed about UK’s geopolitical standing and military readiness? - The Guardian</td><td>Google News RSS</td><td>08 Apr 2026, 12:30 PM IST</td><td>58 (Medium)</td></tr><tr><td>5</td><td>Force has its limits - Telegraph India</td><td>Google News RSS</td><td>21 Apr 2026, 08:42 AM IST</td><td>40 (Low)</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card" style="grid-column: 1 / -1;">
+        <h2>Predictive Simulation (Monte Carlo)</h2>
+        <canvas id="simChart" height="120"></canvas>
+      </section>
+
+      <section class="card" style="grid-column: 1 / -1;">
+        <h2>Source-to-Signal Map</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Claim</th>
+                <th>Recommendation</th>
+                <th>Confidence</th>
+                <th>Supporting Signals (3+)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>REC-01</td><td>Prioritize Targeted Deterrence with continuous verification coverage.</td><td>0.76</td><td><ul><li><a href='https://news.google.com/rss/articles/CBMitwFBVV95cUxOZ0oxOUNuMlBRV0ctQUN0bjlrMXN5bkQwQVM5TmFIRzRqV1duMWo5Rzh5R3FVZ2hMYUVnaEJPdzNDcWhXZGRzWmhhcjFRR013NTF5d0d2SlliVGhhQ053d0h5VjdvWDAxVk1LMmpwRmE3MmZRWWJaMVcxeXFLZ0txTFRRR3BrRVJOS2ZkR2hxZ0NQNm9IWWpXLUg0dXZxaERXcXNUT1JLRTF6TWpPMDFJY2JBcGFBMG8?oc=5' target='_blank'>OSINT-CONFLICT-171</a>: What has conflict in Iran revealed about UK’s geopolitical standing and military readiness? - The Guardian</li><li><a href='https://news.google.com/rss/articles/CBMipwFBVV95cUxPNWMzcjRXanEwRjNUZV9qQ1dzcjdxbXRpRlVSQWwwNlJkaWdCaFZ6a0VfZ2t4NUN3TzVhdzcxZlZsZjh4cFF1SXBpUlUtMWlfSVhRTDhmaUVDcGsxT1gtVVlMSHFJVGZmQW82MVVya04xWW01S0VQWkd0cUlONTc0cmJxMkVuNU1RLVdXRF9ReWlIR0kySldNajd6MmpsNEs1d0RuRDZicw?oc=5' target='_blank'>OSINT-CONFLICT-762</a>: Military conflicts mostly haven’t held up long-term stock growth - invesco.com</li><li><a href='https://news.google.com/rss/articles/CBMitwFBVV95cUxNb24telZjNmtlRFNWVUhvcUVRZVJEMWpIUGZoamx1QVg4Q3k3UHdqdFd4Q3lWaE4zdmxWa0pyOE00U1lDd2prMkhMQzVNRUI1SXhwdEs3LUJTUHEyeUVzTTViRTFMdkRuanJlbXI2dnhrakx1M19ta3pjNzFxc1ZkQ0lyNFdxNXFHRVRBYWN3Wktqa3RPb09tY2R5WkVfZVRuZ0x0QzN6MFROaE9LUThUVkFFTEl1Slk?oc=5' target='_blank'>OSINT-CONFLICT-193</a>: Geopolitical and military lessons drawn from the Russia–Ukraine conflict (I) - Ifimes</li></ul></td></tr><tr><td>REC-02</td><td>Pre-position humanitarian response assets near likely displacement corridors.</td><td>0.76</td><td><ul><li><a href='https://news.google.com/rss/articles/CBMipwFBVV95cUxPNWMzcjRXanEwRjNUZV9qQ1dzcjdxbXRpRlVSQWwwNlJkaWdCaFZ6a0VfZ2t4NUN3TzVhdzcxZlZsZjh4cFF1SXBpUlUtMWlfSVhRTDhmaUVDcGsxT1gtVVlMSHFJVGZmQW82MVVya04xWW01S0VQWkd0cUlONTc0cmJxMkVuNU1RLVdXRF9ReWlIR0kySldNajd6MmpsNEs1d0RuRDZicw?oc=5' target='_blank'>OSINT-CONFLICT-762</a>: Military conflicts mostly haven’t held up long-term stock growth - invesco.com</li><li><a href='https://news.google.com/rss/articles/CBMitwFBVV95cUxNb24telZjNmtlRFNWVUhvcUVRZVJEMWpIUGZoamx1QVg4Q3k3UHdqdFd4Q3lWaE4zdmxWa0pyOE00U1lDd2prMkhMQzVNRUI1SXhwdEs3LUJTUHEyeUVzTTViRTFMdkRuanJlbXI2dnhrakx1M19ta3pjNzFxc1ZkQ0lyNFdxNXFHRVRBYWN3Wktqa3RPb09tY2R5WkVfZVRuZ0x0QzN6MFROaE9LUThUVkFFTEl1Slk?oc=5' target='_blank'>OSINT-CONFLICT-193</a>: Geopolitical and military lessons drawn from the Russia–Ukraine conflict (I) - Ifimes</li><li><a href='https://news.google.com/rss/articles/CBMifkFVX3lxTE10bnNzeVJMektxQnpvcGQzRk5VUFlwUzAzVUNxQUJDaDRNQVBYSjdienVyR3RQTTB3WklEajc4dVFBZTlrakY5a1NtMndTY0VQLTNGX19fWDM0eWtpYjJLbGhQcG1MRXd2bXRDcFF6RG9PNGhGYnh5SVJxaUFmUQ?oc=5' target='_blank'>OSINT-CONFLICT-715</a>: How Iran has become a war of military, economy and geopolitics - Channel 4 News | Substack</li></ul></td></tr><tr><td>REC-03</td><td>Open a rapid diplomatic de-confliction channel within the next 6 hours.</td><td>0.76</td><td><ul><li><a href='https://news.google.com/rss/articles/CBMitwFBVV95cUxNb24telZjNmtlRFNWVUhvcUVRZVJEMWpIUGZoamx1QVg4Q3k3UHdqdFd4Q3lWaE4zdmxWa0pyOE00U1lDd2prMkhMQzVNRUI1SXhwdEs3LUJTUHEyeUVzTTViRTFMdkRuanJlbXI2dnhrakx1M19ta3pjNzFxc1ZkQ0lyNFdxNXFHRVRBYWN3Wktqa3RPb09tY2R5WkVfZVRuZ0x0QzN6MFROaE9LUThUVkFFTEl1Slk?oc=5' target='_blank'>OSINT-CONFLICT-193</a>: Geopolitical and military lessons drawn from the Russia–Ukraine conflict (I) - Ifimes</li><li><a href='https://news.google.com/rss/articles/CBMifkFVX3lxTE10bnNzeVJMektxQnpvcGQzRk5VUFlwUzAzVUNxQUJDaDRNQVBYSjdienVyR3RQTTB3WklEajc4dVFBZTlrakY5a1NtMndTY0VQLTNGX19fWDM0eWtpYjJLbGhQcG1MRXd2bXRDcFF6RG9PNGhGYnh5SVJxaUFmUQ?oc=5' target='_blank'>OSINT-CONFLICT-715</a>: How Iran has become a war of military, economy and geopolitics - Channel 4 News | Substack</li><li><a href='https://news.google.com/rss/articles/CBMi3gFBVV95cUxPMlN3dUljVU1iZ25fYURydUd4UklEV0M1QlZNS0x0Tnd2TVUxZlVZcmpQTmx2a19HaVdnaEtldElMby1JQm93XzNhR3k2S2dBcmRUZ0RYcmk5NzhkZ1pFNEZfTFRPUXp6c0Y3UWYxemVmLTZWN3hXY3JiOG9GMElIU05feXZJYm1FajRqdDVLS1VRRG9aaVhSZnlRQ1dLTE95V3dVSEhKUGZralU2eWxfbXoxd0ZYZ1VrVUdMRVpoNEhHSURqdFhlbEV5SVNReFpQZmpNRHJmaUJYRWEtcnfSAeMBQVVfeXFMTi1kTkRBRzFTajR0TzE4dDhibE5hSFIwTG9SZi1NMGtRS0dHYjhZajFKLVRUUVpISzBOeTNLRFMzRy1sUkY4REExNVdfWWhRTnhPVk1admtWbUh2dUM0a2tEaXZfYm1vVXVsQmxNUHA0QUtRQmVJUlpsU0wybm1QelNJeWYxS0RNU0pvM2Z5dGFEbE9oY083dFFtVGk2ZEZQOUcwc3BsNE41c2RGSk5aZmNONFlTajVDOWdWQU40dmZzRzBjeE5nbThRU2RhZ05SRVVEOG9GVUpkZDZIUHk3S3FNWXc?oc=5' target='_blank'>OSINT-CONFLICT-571</a>: Force has its limits - Telegraph India</li></ul></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card" style="grid-column: 1 / -1;">
+        <h2>Requirement Benchmarks</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Benchmark</th>
+                <th>Status</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Latency <= 300s</td><td>PASS</td><td>8.4s</td></tr><tr><td>Traceability (>=3 signals per claim)</td><td>PASS</td><td>-</td></tr><tr><td>Autonomous Strategic-vs-Civilian Debate</td><td>PASS</td><td>-</td></tr><tr><td>Confidence Scoring</td><td>PASS</td><td>-</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const riskLabels = ["OSINT-CONFLICT-193", "OSINT-CONFLICT-762", "OSINT-CONFLICT-715", "OSINT-CONFLICT-171", "OSINT-CONFLICT-571"];
+    const riskData = [58, 58, 46, 58, 40];
+    const riskLevels = ["Medium", "Medium", "Low", "Medium", "Low"];
+    const publishedIst = ["27 Nov 2025, 05:10 AM IST", "02 Mar 2026, 01:30 PM IST", "18 Mar 2026, 12:30 PM IST", "08 Apr 2026, 12:30 PM IST", "21 Apr 2026, 08:42 AM IST"];
+    const sourceLabels = ["Google News RSS"];
+    const sourceData = [5];
+    const mapPoints = [];
+    const simLabels = ["Diplomatic De-escalation", "Targeted Deterrence", "Full Posture Escalation"];
+    const simSuccess = [61.4, 61.6, 57.4];
+    const simCivilian = [25.8, 43.1, 65.8];
+
+    const riskCtx = document.getElementById('riskChart').getContext('2d');
+    new Chart(riskCtx, {
+      type: 'bar',
+      data: {
+        labels: riskLabels,
+        datasets: [{
+          label: 'Risk Score (0-100)',
+          data: riskData,
+          borderWidth: 1,
+          backgroundColor: riskData.map(v => v >= 75 ? '#ef4444' : (v >= 50 ? '#f59e0b' : '#22c55e'))
+        }]
+      },
+      options: {
+        scales: {
+          y: { beginAtZero: true, max: 100, grid: { color: '#213456' }, ticks: { color: '#a7c0e0' } },
+          x: { grid: { color: '#213456' }, ticks: { color: '#a7c0e0' } }
+        },
+        plugins: {
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const i = context.dataIndex;
+                return `Risk: ${riskData[i]} (${riskLevels[i]}), Time: ${publishedIst[i]}`;
+              }
+            }
+          },
+          legend: { labels: { color: '#d7e5ff' } }
+        }
+      }
+    });
+
+    const sourceCtx = document.getElementById('sourceChart').getContext('2d');
+    new Chart(sourceCtx, {
+      type: 'doughnut',
+      data: {
+        labels: sourceLabels,
+        datasets: [{
+          label: 'Source Count',
+          data: sourceData,
+          backgroundColor: ['#38bdf8', '#4ade80', '#f59e0b', '#ef4444', '#a78bfa', '#22d3ee']
+        }]
+      },
+      options: {
+        plugins: {
+          legend: { labels: { color: '#d7e5ff' } }
+        }
+      }
+    });
+
+    const simCtx = document.getElementById('simChart').getContext('2d');
+    new Chart(simCtx, {
+      type: 'bar',
+      data: {
+        labels: simLabels,
+        datasets: [
+          {
+            label: 'Success Probability (%)',
+            data: simSuccess,
+            backgroundColor: '#22c55e'
+          },
+          {
+            label: 'Civilian Impact Probability (%)',
+            data: simCivilian,
+            backgroundColor: '#ef4444'
+          }
+        ]
+      },
+      options: {
+        scales: {
+          y: { beginAtZero: true, max: 100, grid: { color: '#213456' }, ticks: { color: '#a7c0e0' } },
+          x: { grid: { color: '#213456' }, ticks: { color: '#a7c0e0' } }
+        },
+        plugins: {
+          legend: { labels: { color: '#d7e5ff' } }
+        }
+      }
+    });
+
+    if (mapPoints.length > 0) {
+      const map = L.map('map').setView([mapPoints[0].lat, mapPoints[0].lon], 5);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18,
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
+
+      mapPoints.forEach(point => {
+        L.marker([point.lat, point.lon]).addTo(map)
+          .bindPopup(`<b>${point.source_id}</b><br/>${point.label}`);
+      });
+    }
+  </script>
+</body>
+</html>
